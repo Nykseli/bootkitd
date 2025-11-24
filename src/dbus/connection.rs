@@ -2,7 +2,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use zbus::{connection::Builder, interface, object_server::SignalEmitter, Connection, Result};
 
-use crate::{config::ConfigArgs, grub2::GrubFile};
+use crate::{
+    config::ConfigArgs,
+    grub2::{GrubBootEntries, GrubFile},
+};
 
 pub struct BootloaderConfig {}
 
@@ -32,8 +35,28 @@ impl BootloaderConfig {
     async fn file_changed(emitter: &SignalEmitter<'_>) -> Result<()>;
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct BootEntryData {
+    entries: Value,
+}
+
+pub struct BootEntry {}
+
+#[interface(name = "org.opensuse.bootloader.BootEntry")]
+impl BootEntry {
+    async fn get_entries(&self) -> String {
+        // TODO: return error
+        let grub_entries = GrubBootEntries::new().unwrap();
+        let entries = serde_json::to_value(grub_entries.entries()).unwrap();
+        let data = BootEntryData { entries };
+
+        serde_json::to_string(&data).unwrap()
+    }
+}
+
 pub async fn create_connection(args: &ConfigArgs) -> Result<Connection> {
     let config = BootloaderConfig {};
+    let bootentry = BootEntry {};
 
     let connection = if args.session {
         Builder::session()?
@@ -44,6 +67,7 @@ pub async fn create_connection(args: &ConfigArgs) -> Result<Connection> {
     let connection = connection
         .name("org.opensuse.bootloader")?
         .serve_at("/org/opensuse/bootloader", config)?
+        .serve_at("/org/opensuse/bootloader", bootentry)?
         .build()
         .await?;
 

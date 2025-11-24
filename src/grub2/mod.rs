@@ -1,5 +1,6 @@
+use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fs::read_to_string, path::Path};
+use std::{collections::HashMap, fs::read_to_string, io, path::Path};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyValue {
@@ -85,5 +86,26 @@ impl GrubFile {
 
     pub fn keyvalues(&self) -> &HashMap<String, KeyValue> {
         &self.keyvals
+    }
+}
+
+pub struct GrubBootEntries {
+    entries: Vec<String>,
+}
+
+impl GrubBootEntries {
+    pub fn new() -> io::Result<Self> {
+        let contents = read_to_string("/boot/grub2/grub.cfg")?;
+        // this is unrecovable error so panic is appropriate
+        let re = Regex::new(r"menuentry\s+'([^']+)").expect("Invalid regex");
+        let entries: Vec<String> = re
+            .captures_iter(&contents)
+            .map(|capture| capture[1].to_string())
+            .collect();
+        Ok(Self { entries })
+    }
+
+    pub fn entries(&self) -> &[String] {
+        &self.entries
     }
 }
