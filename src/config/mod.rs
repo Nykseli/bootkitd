@@ -17,3 +17,8 @@ pub const GRUB_FILE_PATH: &'static str = "tmp/grub";
 pub const GRUB_ROOT_PATH: &'static str = "/etc/default";
 #[cfg(feature = "dev")]
 pub const GRUB_ROOT_PATH: &'static str = "tmp";
+
+#[cfg(not(feature = "dev"))]
+pub const DATABASE_PATH: &'static str = "/var/lib/lastlog/lastlog2.db";
+#[cfg(feature = "dev")]
+pub const DATABASE_PATH: &'static str = "tmp/bootloader.db";

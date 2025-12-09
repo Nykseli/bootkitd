@@ -6,10 +6,13 @@ use zbus::{connection::Builder, interface, object_server::SignalEmitter, Connect
 
 use crate::{
     config::{ConfigArgs, GRUB_FILE_PATH},
+    db::Database,
     grub2::{GrubBootEntries, GrubFile, GrubLine},
 };
 
-pub struct BootloaderConfig {}
+pub struct BootloaderConfig {
+    db: Database,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ConfigData {
@@ -36,9 +39,10 @@ impl BootloaderConfig {
         // TODO: fail if data is empty
         let config: ConfigData = serde_json::from_str(data).unwrap();
         let value_list: Vec<GrubLine> = serde_json::from_value(config.value_list).unwrap();
-        let lines: Vec<String> = value_list.into_iter().map(|val| val.into()).collect();
-        let file = lines.join("\n");
+        let grub_file = GrubFile::from_lines(&value_list);
+        let file = grub_file.as_string();
         println!("{file}");
+
         // TODO: start a background thread that executes the grub config
         //       and return an ID that the client can use to poll information
 
@@ -61,6 +65,9 @@ impl BootloaderConfig {
             "grub2-mkconfig stderr: {}",
             String::from_utf8(mkconfig_child.stderr).unwrap()
         );
+
+        // if everything is okay, save the snapshot to a database
+        self.db.save_grub2(&grub_file).await;
 
         "ok".to_string()
     }
@@ -89,8 +96,8 @@ impl BootEntry {
     }
 }
 
-pub async fn create_connection(args: &ConfigArgs) -> Result<Connection> {
-    let config = BootloaderConfig {};
+pub async fn create_connection(args: &ConfigArgs, db: &Database) -> Result<Connection> {
+    let config = BootloaderConfig { db: db.clone() };
     let bootentry = BootEntry {};
 
     let connection = if args.session {

@@ -47,7 +47,17 @@ impl From<KeyValue> for String {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+impl From<&KeyValue> for String {
+    fn from(value: &KeyValue) -> Self {
+        if !value.changed {
+            value.original.clone()
+        } else {
+            format!("{}=\"{}\"", value.key, value.value)
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "t")]
 pub enum GrubLine {
     KeyValue(KeyValue),
@@ -59,6 +69,15 @@ impl From<GrubLine> for String {
         match value {
             GrubLine::KeyValue(key_value) => key_value.into(),
             GrubLine::String { raw_line } => raw_line,
+        }
+    }
+}
+
+impl From<&GrubLine> for String {
+    fn from(value: &GrubLine) -> Self {
+        match value {
+            GrubLine::KeyValue(key_value) => key_value.into(),
+            GrubLine::String { raw_line } => raw_line.into(),
         }
     }
 }
@@ -93,12 +112,31 @@ impl GrubFile {
         Self { lines, keyvals }
     }
 
+    pub fn from_lines(grub_lines: &[GrubLine]) -> Self {
+        let mut lines = Vec::new();
+        let mut keyvals = HashMap::new();
+
+        for line in grub_lines {
+            lines.push(line.clone());
+            if let GrubLine::KeyValue(keyval) = line {
+                keyvals.insert(keyval.key.clone(), keyval.clone());
+            }
+        }
+
+        Self { lines, keyvals }
+    }
+
     pub fn lines(&self) -> &[GrubLine] {
         &self.lines
     }
 
     pub fn keyvalues(&self) -> &HashMap<String, KeyValue> {
         &self.keyvals
+    }
+
+    pub fn as_string(&self) -> String {
+        let lines: Vec<String> = self.lines().into_iter().map(|val| val.into()).collect();
+        lines.join("\n")
     }
 }
 
