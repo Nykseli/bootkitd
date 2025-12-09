@@ -18,6 +18,21 @@ pub enum DErrorType {
     Io(String, std::io::Error),
     Sqlx(String, sqlx::Error),
     Zbus(String, zbus::Error),
+    Serde(String, serde_json::Error),
+}
+
+impl DErrorType {
+    pub fn as_string(&self) -> String {
+        match self {
+            DErrorType::GrubParse(msg) => {
+                format!("Internal Parse: Failed to parse grub config: {msg}")
+            }
+            DErrorType::Io(msg, error) => format!("Internal IO error: {msg} ({error})"),
+            DErrorType::Sqlx(msg, error) => format!("Interal database error: {msg} ({error})"),
+            DErrorType::Zbus(msg, error) => format!("Internal zbus error: {msg} ({error})"),
+            DErrorType::Serde(msg, error) => format!("Json handling error: {msg} ({error})"),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -34,6 +49,10 @@ impl DError {
 
     pub fn grub_parse_error<M: Into<String>>(ctx: DCtx, message: M) -> DResult<()> {
         Err(Self::new(ctx, DErrorType::GrubParse(message.into())))
+    }
+
+    pub fn error(&self) -> &DErrorType {
+        &self.error
     }
 }
 
@@ -75,6 +94,15 @@ impl<T> DRes<T> for zbus::Result<T> {
                 ctx,
                 error: DErrorType::Zbus(msg.into(), err),
             }),
+        }
+    }
+}
+
+impl<T> DRes<T> for serde_json::Result<T> {
+    fn ctx<M: Into<String>>(self, ctx: DCtx, msg: M) -> DResult<T> {
+        match self {
+            Ok(value) => Ok(value),
+            Err(err) => Err(DError::new(ctx, DErrorType::Serde(msg.into(), err))),
         }
     }
 }
