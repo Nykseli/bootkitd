@@ -6,6 +6,12 @@ pub struct ConfigArgs {
     /// Use session/user message bus connection instead of system
     #[arg(short, long, default_value_t = false)]
     pub session: bool,
+
+    /// Set log level, overriding BOOTKIT_LOG_LEVEL env variable.
+    ///
+    /// Possible values: "error", "warn", "info", "debug", "trace", or a number 1-5
+    #[arg(short, long)]
+    pub log_level: Option<tracing::Level>,
 }
 
 #[cfg(not(feature = "dev"))]

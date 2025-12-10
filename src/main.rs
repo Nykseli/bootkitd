@@ -22,7 +22,7 @@ use crate::{
 async fn main() -> DResult<()> {
     let args = ConfigArgs::parse();
 
-    setup_logging();
+    setup_logging(&args);
     log::info!("Starting bootkit service");
 
     let db = Database::new().await?;

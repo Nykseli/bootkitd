@@ -3,7 +3,7 @@ use std::str::FromStr;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{filter::Targets, layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
-use crate::config::DEFAULT_LOG_LEVEL;
+use crate::config::{ConfigArgs, DEFAULT_LOG_LEVEL};
 
 fn log_level() -> tracing::Level {
     if let Some(level) = option_env!("BOOTKIT_LOG_LEVEL") {
@@ -19,8 +19,12 @@ fn log_level() -> tracing::Level {
     }
 }
 
-pub fn setup_logging() {
-    let level = log_level();
+pub fn setup_logging(args: &ConfigArgs) {
+    let level = if let Some(level) = args.log_level {
+        level
+    } else {
+        log_level()
+    };
 
     let filter = Targets::new().with_default(level);
     // turn off library logging unless we want to trace everything
