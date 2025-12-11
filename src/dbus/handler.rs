@@ -50,6 +50,7 @@ struct ConfigData {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct BootEntryData {
     entries: Value,
+    selected_kernel: Value,
 }
 
 #[derive(Clone)]
@@ -142,7 +143,13 @@ impl DbusHandler {
         let grub_entries = GrubBootEntries::new().ctx(dctx!(), "Couldn't read kernel entries")?;
         let entries = serde_json::to_value(grub_entries.entries())
             .ctx(dctx!(), "Cannot trun grub kernel entries into json")?;
-        Ok(BootEntryData { entries })
+        let selected_kernel = serde_json::to_value(grub_entries.selected())
+            .ctx(dctx!(), "Cannot trun grub kernel entries into json")?;
+
+        Ok(BootEntryData {
+            entries,
+            selected_kernel,
+        })
     }
 
     /// Get grub2 boot entries that can be safely sent via dbus

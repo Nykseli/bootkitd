@@ -1,6 +1,6 @@
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fs::read_to_string, io, path::Path};
+use std::{collections::HashMap, fs::read_to_string, path::Path};
 
 use crate::{
     dctx,
@@ -37,10 +37,10 @@ impl KeyValue {
         let split = if let Some(split) = trimmed.split_once('=') {
             split
         } else {
-            return DError::grub_parse_error(
+            return Err(DError::grub_parse_error(
                 dctx!(),
                 format!("Expected '=' on line: {}", self.line + 1),
-            );
+            ));
         };
         self.key = split.0.into();
         self.value = split.1.replace('\'', "").replace('"', "").into();
@@ -158,22 +158,60 @@ impl GrubFile {
 
 pub struct GrubBootEntries {
     entries: Vec<String>,
+    selected: Option<String>,
 }
 
 impl GrubBootEntries {
-    pub fn new() -> io::Result<Self> {
+    pub fn new() -> DResult<Self> {
         log::debug!("Reading kenrnel boot entries from /boot/grub2/grub.cfg");
-        let contents = read_to_string("/boot/grub2/grub.cfg")?;
+        let contents = read_to_string("/boot/grub2/grub.cfg")
+            .ctx(dctx!(), "Cannot read /boot/grub2/grub.cfg")?;
         // this is unrecovable error so panic is appropriate
         let re = Regex::new(r"menuentry\s+'([^']+)").expect("Invalid regex");
         let entries: Vec<String> = re
             .captures_iter(&contents)
             .map(|capture| capture[1].to_string())
             .collect();
-        Ok(Self { entries })
+
+        log::debug!("Reading default boot entry from /boot/grub2/grubenv");
+        let contents = read_to_string("/boot/grub2/grubenv")
+            .ctx(dctx!(), "Cannot read /boot/grub2/grubenv")?;
+
+        let selected_idx = contents
+            .lines()
+            .find(|line| line.starts_with("saved_entry"))
+            .map(|entry| {
+                let split = entry.split_once("=").ok_or_else(|| {
+                    DError::grub_parse_error(
+                        dctx!(),
+                        "Malformed grubenv. Expected '=' after saved_entry",
+                    )
+                })?;
+
+                let idx = split.1.trim().parse::<usize>().map_err(|_| {
+                    DError::grub_parse_error(
+                        dctx!(),
+                        "Malformed grubenv. Expected integer value after saved_entry",
+                    )
+                })?;
+                Ok(idx)
+            });
+
+        let selected = if let Some(idx) = selected_idx {
+            entries.get(idx?).cloned()
+        } else {
+            log::debug!("No default kernel entry selected, defaulting to first available kernel");
+            None
+        };
+
+        Ok(Self { entries, selected })
     }
 
     pub fn entries(&self) -> &[String] {
         &self.entries
+    }
+
+    pub fn selected(&self) -> Option<&String> {
+        self.selected.as_ref()
     }
 }

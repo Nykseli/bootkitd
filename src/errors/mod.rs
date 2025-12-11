@@ -74,8 +74,8 @@ impl DError {
         self
     }
 
-    pub fn grub_parse_error<M: Into<String>>(ctx: DCtx, message: M) -> DResult<()> {
-        Err(Self::new(ctx, DErrorType::GrubParse(message.into())))
+    pub fn grub_parse_error<M: Into<String>>(ctx: DCtx, message: M) -> Self {
+        Self::new(ctx, DErrorType::GrubParse(message.into()))
     }
 
     pub fn error(&self) -> &DErrorType {
