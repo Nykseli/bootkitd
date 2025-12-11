@@ -50,14 +50,28 @@ impl std::fmt::Display for DErrorType {
 #[derive(Debug)]
 #[allow(dead_code)]
 pub struct DError {
+    /// Origin where error happened
     ctx: DCtx,
+    /// Additional places and messages where error was propagated, excluding the origin
+    trace: Vec<(String, DCtx)>,
     error: DErrorType,
 }
 
 impl DError {
     fn new(ctx: DCtx, error: DErrorType) -> Self {
         log::debug!("Error at {ctx}: {error}");
-        Self { ctx, error }
+        Self {
+            ctx,
+            error,
+            trace: Vec::new(),
+        }
+    }
+
+    fn with_trace<M: Into<String>>(mut self, ctx: DCtx, message: M) -> Self {
+        let message = message.into();
+        log::trace!("    trace [{}] {ctx}: {message}", self.trace.len() + 1);
+        self.trace.push((message, ctx));
+        self
     }
 
     pub fn grub_parse_error<M: Into<String>>(ctx: DCtx, message: M) -> DResult<()> {
@@ -73,6 +87,15 @@ pub type DResult<T> = core::result::Result<T, DError>;
 
 pub trait DRes<T> {
     fn ctx<M: Into<String>>(self, ctx: DCtx, msg: M) -> DResult<T>;
+}
+
+impl<T> DRes<T> for DResult<T> {
+    fn ctx<M: Into<String>>(self, ctx: DCtx, msg: M) -> DResult<T> {
+        match self {
+            Ok(value) => Ok(value),
+            Err(err) => Err(err.with_trace(ctx, msg)),
+        }
+    }
 }
 
 impl<T> DRes<T> for std::io::Result<T> {
