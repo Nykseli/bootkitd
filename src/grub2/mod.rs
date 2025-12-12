@@ -156,6 +156,14 @@ impl GrubFile {
     }
 }
 
+enum GrubEnvValue<'a> {
+    /// Index of the bootentry
+    Index(usize),
+    /// Name of the bootentry
+    // Name(String),
+    Name(&'a str),
+}
+
 pub struct GrubBootEntries {
     entries: Vec<String>,
     selected: Option<String>,
@@ -188,17 +196,28 @@ impl GrubBootEntries {
                     )
                 })?;
 
-                let idx = split.1.trim().parse::<usize>().map_err(|_| {
-                    DError::grub_parse_error(
+                let value = split.1.trim();
+                if value.is_empty() {
+                    return Err(DError::grub_parse_error(
                         dctx!(),
-                        "Malformed grubenv. Expected integer value after saved_entry",
-                    )
-                })?;
-                Ok(idx)
+                        "Malformed grubenv. Expected value after saved_entry",
+                    ));
+                }
+
+                let value = if let Ok(index) = value.parse::<usize>() {
+                    GrubEnvValue::Index(index)
+                } else {
+                    GrubEnvValue::Name(value)
+                };
+
+                Ok(value)
             });
 
-        let selected = if let Some(idx) = selected_idx {
-            entries.get(idx?).cloned()
+        let selected = if let Some(value) = selected_idx {
+            match value? {
+                GrubEnvValue::Index(idx) => entries.get(idx).cloned(),
+                GrubEnvValue::Name(name) => entries.iter().find(|entry| *entry == name).cloned(),
+            }
         } else {
             log::debug!("No default kernel entry selected, defaulting to first available kernel");
             None
