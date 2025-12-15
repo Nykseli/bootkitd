@@ -10,6 +10,7 @@ if [[ ! -d "tmp" ]]; then
 
     touch tmp/bootkit.db
     sqlite3 tmp/bootkit.db < db/grub2.sql
+    sqlite3 tmp/bootkit.db < db/selected_snapshot.sql
 fi
 
 cargo run --features dev -- --session
