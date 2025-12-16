@@ -160,6 +160,27 @@ impl DbusHandler {
             );
 
             log::debug!("Calling grub2-set-default {kernel}, done");
+        } else {
+            log::debug!("Removing default seleceted kernel");
+
+            // grub2-editenv /boot/grub2/grubenv unset saved_entry
+            let edit_env = Command::new("grub2-editenv")
+                .arg("/boot/grub2/grubenv")
+                .arg("unset")
+                .arg("saved_entry")
+                .output()
+                .ctx(dctx!(), "Failed to read output from grub2-editenv")?;
+
+            log::debug!(
+                "grub2-edit-env stdout: {}",
+                String::from_utf8_lossy(&edit_env.stdout)
+            );
+            log::debug!(
+                "grub2-edit-env stderr: {}",
+                String::from_utf8_lossy(&edit_env.stderr)
+            );
+
+            log::debug!("Removing default seleceted kernel done");
         }
         Ok(())
     }
