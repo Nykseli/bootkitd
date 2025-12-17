@@ -23,10 +23,10 @@ pub enum DErrorType {
     /// Generic error when nothing else is applicable
     Error(String),
     GrubParse(String),
-    Io(String, std::io::Error),
-    Sqlx(String, sqlx::Error),
-    Zbus(String, zbus::Error),
-    Serde(String, serde_json::Error),
+    Io(String, Box<std::io::Error>),
+    Sqlx(String, Box<sqlx::Error>),
+    Zbus(String, Box<zbus::Error>),
+    Serde(String, Box<serde_json::Error>),
 }
 
 impl DErrorType {
@@ -109,7 +109,7 @@ impl<T> DRes<T> for std::io::Result<T> {
     fn ctx<M: Into<String>>(self, ctx: DCtx, msg: M) -> DResult<T> {
         match self {
             Ok(value) => Ok(value),
-            Err(err) => Err(DError::new(ctx, DErrorType::Io(msg.into(), err))),
+            Err(err) => Err(DError::new(ctx, DErrorType::Io(msg.into(), Box::new(err)))),
         }
     }
 }
@@ -118,7 +118,10 @@ impl<T> DRes<T> for sqlx::Result<T> {
     fn ctx<M: Into<String>>(self, ctx: DCtx, msg: M) -> DResult<T> {
         match self {
             Ok(value) => Ok(value),
-            Err(err) => Err(DError::new(ctx, DErrorType::Sqlx(msg.into(), err))),
+            Err(err) => Err(DError::new(
+                ctx,
+                DErrorType::Sqlx(msg.into(), Box::new(err)),
+            )),
         }
     }
 }
@@ -127,7 +130,10 @@ impl<T> DRes<T> for zbus::Result<T> {
     fn ctx<M: Into<String>>(self, ctx: DCtx, msg: M) -> DResult<T> {
         match self {
             Ok(value) => Ok(value),
-            Err(err) => Err(DError::new(ctx, DErrorType::Zbus(msg.into(), err))),
+            Err(err) => Err(DError::new(
+                ctx,
+                DErrorType::Zbus(msg.into(), Box::new(err)),
+            )),
         }
     }
 }
@@ -136,7 +142,10 @@ impl<T> DRes<T> for serde_json::Result<T> {
     fn ctx<M: Into<String>>(self, ctx: DCtx, msg: M) -> DResult<T> {
         match self {
             Ok(value) => Ok(value),
-            Err(err) => Err(DError::new(ctx, DErrorType::Serde(msg.into(), err))),
+            Err(err) => Err(DError::new(
+                ctx,
+                DErrorType::Serde(msg.into(), Box::new(err)),
+            )),
         }
     }
 }
