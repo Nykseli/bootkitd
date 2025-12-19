@@ -339,3 +339,171 @@ impl GrubBootEntries {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    impl PartialEq<(&str, &str)> for GrubLine {
+        fn eq(&self, other: &(&str, &str)) -> bool {
+            match self {
+                GrubLine::KeyValue(key_value) => {
+                    key_value.key == other.0 && key_value.value == other.1
+                }
+                _ => false, // GrubLine::String { raw_line } => todo!(),
+            }
+        }
+    }
+
+    impl PartialEq<&str> for GrubLine {
+        fn eq(&self, other: &&str) -> bool {
+            match self {
+                GrubLine::String { raw_line } => raw_line == other,
+                _ => false,
+            }
+        }
+    }
+
+    #[test]
+    fn test_grub2_parsing_no_eol() {
+        let file = GrubFile::new("GRUB_DEFAULT=saved").unwrap();
+        let lines = file.lines();
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0], ("GRUB_DEFAULT", "saved"));
+    }
+
+    #[test]
+    fn test_grub2_parsing_with_eol() {
+        let file = GrubFile::new("GRUB_DEFAULT=saved\n").unwrap();
+        let lines = file.lines();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], ("GRUB_DEFAULT", "saved"));
+        // make sure the last line is empty (empty trailing line)
+        assert_eq!(lines[1], "");
+    }
+
+    #[test]
+    fn test_grub2_parsing_fail() {
+        let err = GrubFile::new("GRUB_DEFAULT").unwrap_err();
+        assert_eq!(
+            err.error().as_string(),
+            "Internal Parse: Failed to parse grub config: Expected '=' on line: 1"
+        );
+    }
+
+    #[test]
+    fn test_grub2_parsing_simple() {
+        let file_data = read_to_string("test_data/grub_simple").unwrap();
+        let file = GrubFile::new(&file_data).unwrap();
+        let lines = file.lines();
+        assert_eq!(lines.len(), 5);
+        assert_eq!(lines[0], ("GRUB_DISTRIBUTOR", ""));
+        assert_eq!(lines[1], ("GRUB_DEFAULT", "saved"));
+        assert_eq!(lines[2], ("GRUB_HIDDEN_TIMEOUT_QUIET", "true"));
+        assert_eq!(lines[3], ("GRUB_TIMEOUT", "8"));
+        // make sure the last line is empty (empty trailing line)
+        assert_eq!(lines[4], "");
+        assert_eq!(file.as_string(), file_data);
+    }
+
+    #[test]
+    fn test_grub2_parsing_full() {
+        let file_data = read_to_string("test_data/grub_full").unwrap();
+        let file = GrubFile::new(&file_data).unwrap();
+        let lines = file.lines();
+        assert_eq!(lines.len(), 46);
+        assert_eq!(lines[0], "# If you change this file, run \'grub2-mkconfig -o /boot/grub2/grub.cfg\' afterwards to update");
+        assert_eq!(lines[1], "# /boot/grub2/grub.cfg.");
+        assert_eq!(lines[2], "");
+        assert_eq!(lines[3], "# Uncomment to set your own custom distributor. If you leave it unset or empty, the default");
+        assert_eq!(
+            lines[4],
+            "# policy is to determine the value from /etc/os-release"
+        );
+        assert_eq!(lines[5], ("GRUB_DISTRIBUTOR", ""));
+        assert_eq!(lines[6], ("GRUB_DEFAULT", "saved"));
+        assert_eq!(lines[7], ("GRUB_HIDDEN_TIMEOUT", "0"));
+        assert_eq!(lines[8], ("GRUB_HIDDEN_TIMEOUT_QUIET", "true"));
+        assert_eq!(lines[9], ("GRUB_TIMEOUT", "8"));
+        assert_eq!(
+            lines[10],
+            (
+                "GRUB_CMDLINE_LINUX_DEFAULT",
+                "splash=silent quiet security=apparmor amd_pstate=active mitigations=auto"
+            )
+        );
+        assert_eq!(lines[11], ("GRUB_CMDLINE_LINUX", ""));
+        assert_eq!(lines[12], "");
+        assert_eq!(
+            lines[13],
+            "# Uncomment to automatically save last booted menu entry in GRUB2 environment"
+        );
+        assert_eq!(lines[14], "");
+        assert_eq!(lines[15], "# variable `saved_entry\'");
+        assert_eq!(lines[16], "# GRUB_SAVEDEFAULT=\"true\"");
+        assert_eq!(
+            lines[17],
+            "#Uncomment to enable BadRAM filtering, modify to suit your needs"
+        );
+        assert_eq!(lines[18], "");
+        assert_eq!(
+            lines[19],
+            "# This works with Linux (no patch required) and with any kernel that obtains"
+        );
+        assert_eq!(
+            lines[20],
+            "# the memory map information from GRUB (GNU Mach, kernel of FreeBSD ...)"
+        );
+        assert_eq!(
+            lines[21],
+            "# GRUB_BADRAM=\"0x01234567,0xfefefefe,0x89abcdef,0xefefefef\""
+        );
+        assert_eq!(
+            lines[22],
+            "#Uncomment to disable graphical terminal (grub-pc only)"
+        );
+        assert_eq!(lines[23], "");
+        assert_eq!(lines[24], ("GRUB_TERMINAL", "gfxterm"));
+        assert_eq!(lines[25], "# The resolution used on graphical terminal");
+        assert_eq!(
+            lines[26],
+            "#note that you can use only modes which your graphic card supports via VBE"
+        );
+        assert_eq!(lines[27], "");
+        assert_eq!(
+            lines[28],
+            "# you can see them in real GRUB with the command `vbeinfo\'"
+        );
+        assert_eq!(lines[29], ("GRUB_GFXMODE", "auto"));
+        assert_eq!(
+            lines[30],
+            "# Uncomment if you don\'t want GRUB to pass \"root=UUID=xxx\" parameter to Linux"
+        );
+        assert_eq!(lines[31], "# GRUB_DISABLE_LINUX_UUID=true");
+        assert_eq!(
+            lines[32],
+            "#Uncomment to disable generation of recovery mode menu entries"
+        );
+        assert_eq!(lines[33], "");
+        assert_eq!(lines[34], "# GRUB_DISABLE_RECOVERY=\"true\"");
+        assert_eq!(lines[35], "#Uncomment to get a beep at grub start");
+        assert_eq!(lines[36], "");
+        assert_eq!(lines[37], "# GRUB_INIT_TUNE=\"480 440 1\"");
+        assert_eq!(lines[38], ("GRUB_BACKGROUND", ""));
+        assert_eq!(
+            lines[39],
+            ("GRUB_THEME", "/boot/grub2/themes/openSUSE/theme.txt")
+        );
+        assert_eq!(lines[40], ("SUSE_BTRFS_SNAPSHOT_BOOTING", "true"));
+        assert_eq!(lines[41], ("GRUB_USE_LINUXEFI", "true"));
+        assert_eq!(lines[42], ("GRUB_DISABLE_OS_PROBER", "false"));
+        assert_eq!(lines[43], ("GRUB_ENABLE_CRYPTODISK", "y"));
+        assert_eq!(
+            lines[44],
+            ("GRUB_CMDLINE_XEN_DEFAULT", "vga=gfx-1024x768x16")
+        );
+        assert_eq!(lines[45], "");
+
+        assert_eq!(file.as_string(), file_data);
+    }
+}
