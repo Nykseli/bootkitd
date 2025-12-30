@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=org.opensuse.bootkit
+Exec=/usr/sbin/bootkitd
+User=root
+SystemdService=bootkitd.service

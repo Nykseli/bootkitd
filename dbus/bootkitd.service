@@ -5,6 +5,3 @@ Description=bookit daemon
 Type=dbus
 BusName=org.opensuse.bootkit
 ExecStart=/usr/sbin/bootkitd
-
-[Install]
-WantedBy=default.target
