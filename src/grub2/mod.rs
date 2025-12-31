@@ -263,6 +263,7 @@ impl GrubBootEntry {
     }
 }
 
+#[derive(Debug)]
 pub struct GrubBootEntries {
     entries: Vec<GrubBootEntry>,
     selected: Option<GrubBootEntry>,
@@ -271,15 +272,20 @@ pub struct GrubBootEntries {
 impl GrubBootEntries {
     pub fn new() -> DResult<Self> {
         log::debug!("Reading kenrnel boot entries from /boot/grub2/grub.cfg");
-        let contents = read_to_string("/boot/grub2/grub.cfg")
+        let config = read_to_string("/boot/grub2/grub.cfg")
             .ctx(dctx!(), "Cannot read /boot/grub2/grub.cfg")?;
-        let entries = GrubBootEntry::parse_entries(&contents)?;
 
         log::debug!("Reading default boot entry from /boot/grub2/grubenv");
-        let contents = read_to_string("/boot/grub2/grubenv")
+        let grub_env = read_to_string("/boot/grub2/grubenv")
             .ctx(dctx!(), "Cannot read /boot/grub2/grubenv")?;
 
-        let selected_idx = contents
+        Self::from_contents(&config, &grub_env)
+    }
+
+    fn from_contents(grub_config: &str, grub_env: &str) -> DResult<Self> {
+        let entries = GrubBootEntry::parse_entries(grub_config)?;
+
+        let selected_idx = grub_env
             .lines()
             .find(|line| line.starts_with("saved_entry"))
             .map(|entry| {
@@ -505,5 +511,35 @@ mod tests {
         assert_eq!(lines[45], "");
 
         assert_eq!(file.as_string(), file_data);
+    }
+
+    #[test]
+    fn test_grub2_bootentries_noselect() {
+        let config = read_to_string("test_data/grub.cfg").unwrap();
+        let grub_env = read_to_string("test_data/grubenv_empty").unwrap();
+        let entries = GrubBootEntries::from_contents(&config, &grub_env).unwrap();
+
+        assert_eq!(entries.entries().len(), 4);
+        assert_eq!(entries.entries()[0].entry, "openSUSE Tumbleweed Minimal");
+        assert_eq!(entries.entries()[0].submenus, Vec::<String>::new());
+        assert_eq!(
+            entries.entries()[1].entry,
+            "openSUSE Tumbleweed Minimal, with Linux 6.17.5-1-default"
+        );
+        assert_eq!(
+            entries.entries()[1].submenus,
+            vec!["Advanced options for openSUSE Tumbleweed Minimal"]
+        );
+        assert_eq!(
+            entries.entries()[2].entry,
+            "openSUSE Tumbleweed Minimal, with Linux 6.17.5-1-default (recovery mode)"
+        );
+        assert_eq!(
+            entries.entries()[2].submenus,
+            vec!["Advanced options for openSUSE Tumbleweed Minimal"]
+        );
+        assert_eq!(entries.entries()[3].entry, "UEFI Firmware Settings");
+        assert_eq!(entries.entries()[3].submenus, Vec::<String>::new());
+        assert_eq!(entries.selected(), None);
     }
 }
