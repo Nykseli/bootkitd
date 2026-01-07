@@ -5,9 +5,9 @@ use tracing_subscriber::{
     filter::Targets, fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer,
 };
 
-use crate::config::{ConfigArgs, DEFAULT_LOG_LEVEL};
+use crate::config::{ConfigArgs, LogLevel, DEFAULT_LOG_LEVEL};
 
-fn log_level() -> tracing::Level {
+fn log_level() -> LogLevel {
     if let Some(level) = option_env!("BOOTKIT_LOG_LEVEL") {
         // Possible values (case insensitive)
         // ERROR
@@ -15,7 +15,7 @@ fn log_level() -> tracing::Level {
         // INFO
         // DEBUG
         // TRACE
-        tracing::Level::from_str(level).unwrap_or(DEFAULT_LOG_LEVEL)
+        LogLevel::from_str(level).unwrap_or(DEFAULT_LOG_LEVEL)
     } else {
         DEFAULT_LOG_LEVEL
     }
@@ -30,7 +30,7 @@ pub fn setup_logging(args: &ConfigArgs) {
 
     let filter = Targets::new().with_default(level);
     // turn off library logging unless we want to trace everything
-    let filter = if level != tracing::Level::TRACE {
+    let filter = if level != LogLevel::FullTrace {
         filter
             .with_target("sqlx", LevelFilter::OFF)
             .with_target("zbus", LevelFilter::OFF)
