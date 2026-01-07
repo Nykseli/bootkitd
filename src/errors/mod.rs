@@ -94,7 +94,7 @@ impl Drop for DError {
     fn drop(&mut self) {
         log::error!("Error at {}: {}", self.ctx, self.error());
         for (idx, (message, ctx)) in self.trace.iter().enumerate() {
-            log::trace!("    trace [{}] {ctx}: {message}", idx + 1);
+            log::debug!("    trace [{}] {ctx}: {message}", idx + 1);
         }
     }
 }
