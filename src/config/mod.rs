@@ -4,7 +4,7 @@ use clap::Parser;
 
 /// Log levels that are idententical to `tracing::Level` but includes
 /// `FullTrace` to separate traces that have library traces
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd)]
 pub enum LogLevel {
     /// The "error" level.
     ///
@@ -130,3 +130,8 @@ pub const DATABASE_PATH: &str = "tmp/bootkit.db";
 pub const DEFAULT_LOG_LEVEL: LogLevel = LogLevel::Info;
 #[cfg(feature = "dev")]
 pub const DEFAULT_LOG_LEVEL: LogLevel = LogLevel::Debug;
+
+#[cfg(not(feature = "dev"))]
+pub const BOOTKIT_LOG_FILE: &str = "/var/log/bootkitd.log";
+#[cfg(feature = "dev")]
+pub const BOOTKIT_LOG_FILE: &str = "tmp/bootkitd.log";
