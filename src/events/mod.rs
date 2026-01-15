@@ -1,39 +1,134 @@
+use std::{
+    io::ErrorKind,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
+
+use event_listener::Listener;
 use inotify::{EventMask, Inotify, WatchMask};
+use tokio::task::JoinHandle;
 use zbus::Connection;
 
-use crate::{config::GRUB_ROOT_PATH, dbus::connection::BootKitConfigSignals};
+use crate::{
+    config::GRUB_ROOT_PATH,
+    dbus::connection::BootKitConfigSignals,
+    dctx,
+    errors::{DRes, DResult},
+};
 
-pub async fn listen_files(connection: &Connection) -> zbus::Result<()> {
-    let mut inotify = Inotify::init().expect("Failed to initialize inotify");
-    inotify
-        .watches()
-        .add(GRUB_ROOT_PATH, WatchMask::MODIFY)
-        .expect("Failed to watch /etc/default/grub");
+type EventHandle<T> = JoinHandle<DResult<T>>;
 
-    log::info!("Listening to config changes");
+#[derive(Clone)]
+pub struct BootkitEvents {
+    connection: Connection,
+    shutdown: Arc<AtomicBool>,
+}
 
-    loop {
-        let mut buffer = [0; 4096];
-        let events = inotify
-            .read_events_blocking(&mut buffer)
-            .expect("Failed to read inotify events");
+impl BootkitEvents {
+    pub fn new(connection: &Connection) -> Self {
+        Self {
+            connection: connection.clone(),
+            shutdown: Arc::new(AtomicBool::new(false)),
+        }
+    }
 
-        // prevent duplicate modify event triggers
-        let mut signaled = false;
-        for event in events {
-            if event.mask.contains(EventMask::MODIFY)
-                && !signaled
-                && event.name.is_some_and(|name| name == "grub")
-            {
-                signaled = true;
-                connection
-                    .object_server()
-                    .interface("/org/opensuse/bootkit")
-                    .await?
-                    .file_changed()
-                    .await?;
-                log::debug!("{GRUB_ROOT_PATH} contents was modified. Signaling dbus");
+    /// Signal that all the listen_ functions should stop execution
+    /// at the next available moment
+    ///
+    /// This method needs to take ownership to make sure `connection` is dropped
+    /// after this call so `connection.graceful_shutdown()` doesn't hang
+    pub fn signal_shutdown(self) {
+        self.shutdown.store(true, Ordering::Relaxed);
+    }
+
+    async fn listen_files_loop(&self) -> zbus::Result<()> {
+        let mut inotify = Inotify::init().expect("Failed to initialize inotify");
+        inotify
+            .watches()
+            .add(GRUB_ROOT_PATH, WatchMask::MODIFY)
+            .expect("Failed to watch /etc/default/grub");
+
+        log::info!("Listening to config changes");
+
+        while !self.shutdown.load(Ordering::Relaxed) {
+            let mut buffer = [0; 4096];
+
+            let events = match inotify.read_events(&mut buffer) {
+                Ok(events) => events,
+                Err(error) if error.kind() == ErrorKind::WouldBlock => continue,
+                Err(err) => panic!("Error while reading events: {err}"),
+            };
+
+            // prevent duplicate modify event triggers
+            let mut signaled = false;
+            for event in events {
+                if event.mask.contains(EventMask::MODIFY)
+                    && !signaled
+                    && event.name.is_some_and(|name| name == "grub")
+                {
+                    signaled = true;
+                    self.connection
+                        .object_server()
+                        .interface("/org/opensuse/bootkit")
+                        .await?
+                        .file_changed()
+                        .await?;
+                    log::debug!("{GRUB_ROOT_PATH} contents was modified. Signaling dbus");
+                }
             }
         }
+
+        Ok(())
+    }
+
+    fn listen_files(&self) -> EventHandle<()> {
+        let copy = self.clone();
+        tokio::spawn(async move {
+            copy.listen_files_loop()
+                .await
+                .ctx(dctx!(), "Failed to listen file events")
+        })
+    }
+
+    fn detect_idle_connection(&self) -> EventHandle<()> {
+        let copy = self.clone();
+        tokio::spawn(async move {
+            let mut counter = 0;
+
+            // TODO: configure time
+            while counter < 10 * 1000 && !copy.shutdown.load(Ordering::Relaxed) {
+                let activity = copy
+                    .connection
+                    .monitor_activity()
+                    .wait_timeout(Duration::from_millis(100));
+                if activity.is_none() {
+                    counter += 100;
+                } else {
+                    counter = 0;
+                }
+            }
+
+            // TODO: when this happens, send a signal to clients
+            log::debug!("Idle counter limit exceeded. Stopping the program");
+            Ok(())
+        })
+    }
+
+    pub async fn listen_events(&self) -> DResult<()> {
+        let file_changes = self.listen_files();
+        let idle_connection = self.detect_idle_connection();
+        let res = tokio::select! {
+           res = file_changes => {
+               res.ctx(dctx!(), "File change detection panicked")
+           }
+           res = idle_connection=> {
+               res.ctx(dctx!(), "Idle detection panicked")
+           }
+        };
+
+        res?
     }
 }

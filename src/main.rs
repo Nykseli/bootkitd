@@ -1,5 +1,4 @@
 use clap::Parser;
-use std::future::pending;
 
 mod config;
 mod db;
@@ -14,7 +13,7 @@ use crate::{
     db::Database,
     dbus::connection::create_connection,
     errors::{DRes, DResult},
-    events::listen_files,
+    events::BootkitEvents,
     logging::setup_logging,
 };
 
@@ -31,9 +30,20 @@ async fn main() -> DResult<()> {
     let connection = create_connection(&args, &db)
         .await
         .ctx(dctx!(), "Failed to create Zbus connection")?;
-    listen_files(&connection)
-        .await
-        .ctx(dctx!(), "Failed to listen file events")?;
-    pending::<()>().await;
+
+    let events = BootkitEvents::new(&connection);
+    let event_res = events.listen_events().await;
+    log::debug!("Event listener exited. Shutting down all events.");
+    events.signal_shutdown();
+    // This will hang until all the references to connection are dropped
+    // so be careful where you clone connections!
+    log::debug!("Trying to gracefully shutdown dbus connections...");
+    connection.graceful_shutdown().await;
+    log::debug!("Graceful connection shutdown done");
+    if event_res.is_err() {
+        log::info!("Bootkitd shutdown due to error");
+    } else {
+        log::info!("Bootkitd shutdown due to inactivity");
+    }
     Ok(())
 }
