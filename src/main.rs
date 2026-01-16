@@ -32,7 +32,7 @@ async fn main() -> DResult<()> {
         .ctx(dctx!(), "Failed to create Zbus connection")?;
 
     let events = BootkitEvents::new(&connection);
-    let event_res = events.listen_events().await;
+    let event_res = events.listen_events(&args).await;
     log::debug!("Event listener exited. Shutting down all events.");
     events.signal_shutdown();
     // This will hang until all the references to connection are dropped

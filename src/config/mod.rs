@@ -2,6 +2,10 @@ use std::str::FromStr;
 
 use clap::Parser;
 
+use crate::config::time::TimeConfig;
+
+mod time;
+
 /// Log levels that are idententical to `tracing::Level` but includes
 /// `FullTrace` to separate traces that have library traces
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd)]
@@ -99,6 +103,28 @@ pub struct ConfigArgs {
     /// Print pretty logging output that includes colors and timestamps
     #[arg(short, long, default_value_t = false)]
     pub pretty: bool,
+
+    /// How long program can idle before it's shut down. Idling mean not D-Bus activity.
+    ///
+    /// Defaults to 5 minutes.
+    ///
+    /// Syntax: <value><unit> where unit is positive integer and unit is time unit.
+    ///
+    /// Possible unit values (case insensitive): s, sec, second, m, min, minute, h, hour
+    #[arg(short, long)]
+    idle_time: Option<TimeConfig>,
+}
+
+impl ConfigArgs {
+    /// Configured allowed idle time in milliseconds
+    pub fn allowed_idle_time(&self) -> u64 {
+        if let Some(time) = self.idle_time {
+            time.milliseconds
+        } else {
+            // 5 minutes in milliseconds
+            5 * 60 * 1000
+        }
+    }
 }
 
 #[cfg(not(feature = "dev"))]

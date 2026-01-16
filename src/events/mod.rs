@@ -13,7 +13,7 @@ use tokio::task::JoinHandle;
 use zbus::Connection;
 
 use crate::{
-    config::GRUB_ROOT_PATH,
+    config::{ConfigArgs, GRUB_ROOT_PATH},
     dbus::connection::BootKitConfigSignals,
     dctx,
     errors::{DRes, DResult},
@@ -93,13 +93,12 @@ impl BootkitEvents {
         })
     }
 
-    fn detect_idle_connection(&self) -> EventHandle<()> {
+    fn detect_idle_connection(&self, timeout: u64) -> EventHandle<()> {
         let copy = self.clone();
         tokio::spawn(async move {
             let mut counter = 0;
 
-            // TODO: configure time
-            while counter < 10 * 1000 && !copy.shutdown.load(Ordering::Relaxed) {
+            while counter < timeout && !copy.shutdown.load(Ordering::Relaxed) {
                 let activity = copy
                     .connection
                     .monitor_activity()
@@ -117,9 +116,9 @@ impl BootkitEvents {
         })
     }
 
-    pub async fn listen_events(&self) -> DResult<()> {
+    pub async fn listen_events(&self, config: &ConfigArgs) -> DResult<()> {
         let file_changes = self.listen_files();
-        let idle_connection = self.detect_idle_connection();
+        let idle_connection = self.detect_idle_connection(config.allowed_idle_time());
         let res = tokio::select! {
            res = file_changes => {
                res.ctx(dctx!(), "File change detection panicked")
